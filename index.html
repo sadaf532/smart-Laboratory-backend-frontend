@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartLab — Queue Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-card: #1a2234;
+            --bg-card-hover: #1f2b42;
+            --border: #2a3650;
+            --text-primary: #e8ecf4;
+            --text-secondary: #8899b4;
+            --text-muted: #5a6a85;
+            --accent-cyan: #22d3ee;
+            --accent-cyan-dim: rgba(34,211,238,0.15);
+            --accent-green: #34d399;
+            --accent-green-dim: rgba(52,211,153,0.15);
+            --accent-amber: #fbbf24;
+            --accent-amber-dim: rgba(251,191,36,0.15);
+            --accent-red: #f87171;
+            --accent-red-dim: rgba(248,113,113,0.15);
+            --accent-purple: #a78bfa;
+            --accent-purple-dim: rgba(167,139,250,0.15);
+            --shadow: 0 4px 24px rgba(0,0,0,0.4);
+            --radius: 12px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ── BACKGROUND GRID EFFECT ── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(34,211,238,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(34,211,238,0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── SIDEBAR ── */
+        .sidebar {
+            position: fixed;
+            left: 0; top: 0; bottom: 0;
+            width: 240px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 24px 16px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 32px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            margin-bottom: 4px;
+        }
+
+        .nav-item:hover { background: var(--bg-card); color: var(--text-primary); }
+        .nav-item.active { background: var(--accent-cyan-dim); color: var(--accent-cyan); }
+        .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+        .user-info {
+            margin-top: auto;
+            padding: 14px;
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+        }
+
+        .user-info .name { font-weight: 600; font-size: 14px; }
+        .user-info .role { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+        .user-info .logout-btn {
+            margin-top: 10px;
+            width: 100%;
+            padding: 6px;
+            background: var(--accent-red-dim);
+            color: var(--accent-red);
+            border: 1px solid rgba(248,113,113,0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .user-info .logout-btn:hover { background: rgba(248,113,113,0.25); }
+
+        /* ── MAIN CONTENT ── */
+        .main {
+            margin-left: 240px;
+            padding: 32px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .page { display: none; }
+        .page.active { display: block; animation: fadeIn 0.3s ease; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            letter-spacing: -0.5px;
+        }
+
+        .page-subtitle {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 28px;
+        }
+
+        /* ── STATS CARDS ── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            transition: all 0.25s;
+        }
+
+        .stat-card:hover { border-color: var(--accent-cyan); transform: translateY(-2px); box-shadow: var(--shadow); }
+
+        .stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .stat-value { font-size: 32px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+        .stat-value.cyan { color: var(--accent-cyan); }
+        .stat-value.green { color: var(--accent-green); }
+        .stat-value.amber { color: var(--accent-amber); }
+        .stat-value.red { color: var(--accent-red); }
+        .stat-value.purple { color: var(--accent-purple); }
+
+        /* ── CARDS / PANELS ── */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-title .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+        /* ── EQUIPMENT LIST ── */
+        .equip-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+            background: var(--bg-secondary);
+        }
+
+        .equip-item:hover { border-color: var(--accent-cyan); background: var(--bg-card-hover); }
+
+        .equip-name { font-weight: 600; font-size: 15px; }
+        .equip-category { font-size: 12px; color: var(--text-muted); }
+
+        .state-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .state-idle { background: var(--accent-green-dim); color: var(--accent-green); }
+        .state-busy { background: var(--accent-amber-dim); color: var(--accent-amber); }
+        .state-unavailable { background: var(--accent-red-dim); color: var(--accent-red); }
+
+        .queue-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--accent-purple);
+            background: var(--accent-purple-dim);
+            padding: 3px 10px;
+            border-radius: 12px;
+        }
+
+        /* ── BUTTONS ── */
+        .btn {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 8px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary { background: var(--accent-cyan); color: var(--bg-primary); }
+        .btn-primary:hover { background: #06b6d4; transform: translateY(-1px); }
+        .btn-success { background: var(--accent-green); color: var(--bg-primary); }
+        .btn-success:hover { background: #10b981; }
+        .btn-danger { background: var(--accent-red); color: #fff; }
+        .btn-danger:hover { background: #ef4444; }
+        .btn-outline {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+        .btn-outline:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+        /* ── FORMS ── */
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .form-input, .form-select {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        /* ── TABLE ── */
+        .table-wrap { overflow-x: auto; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th {
+            text-align: left;
+            padding: 10px 14px;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(42,54,80,0.5);
+        }
+
+        tr:hover td { background: rgba(34,211,238,0.03); }
+
+        /* ── FSM DIAGRAM ── */
+        .fsm-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 320px;
+        }
+
+        .fsm-container svg { max-width: 100%; }
+
+        /* ── TOAST ── */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 14px 24px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 9999;
+            animation: slideUp 0.3s ease;
+            display: none;
+        }
+
+        .toast.success { background: var(--accent-green); color: var(--bg-primary); }
+        .toast.error { background: var(--accent-red); color: #fff; }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── AUTH PAGE ── */
+        .auth-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin-left: 0 !important;
+            padding: 20px;
+        }
+
+        .auth-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: var(--shadow);
+        }
+
+        .auth-card .logo { font-size: 24px; text-align: center; margin-bottom: 4px; }
+        .auth-card .logo-sub { text-align: center; margin-bottom: 32px; }
+
+        .auth-tabs {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 4px;
+            margin-bottom: 24px;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 8px;
+            text-align: center;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+
+        .auth-tab.active { background: var(--accent-cyan-dim); color: var(--accent-cyan); }
+
+        /* ── MODAL ── */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 500;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.show { display: flex; }
+
+        .modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: var(--shadow);
+            animation: fadeIn 0.2s ease;
+        }
+
+        .modal-title { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 768px) {
+            .sidebar { width: 60px; padding: 16px 8px; }
+            .sidebar .logo, .sidebar .logo-sub, .sidebar .nav-text, .sidebar .user-info { display: none; }
+            .main { margin-left: 60px; padding: 20px; }
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        /* ── PULSE ANIMATION FOR LIVE INDICATOR ── */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .live-dot {
+            width: 8px; height: 8px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ══════════ AUTH PAGE ══════════ -->
+<div id="authPage" class="auth-wrapper">
+    <div class="auth-card">
+        <div class="logo">⚡ SmartLab</div>
+        <div class="logo-sub">Queue Monitoring System</div>
+
+        <div class="auth-tabs">
+            <div class="auth-tab active" onclick="switchAuthTab('login')">Login</div>
+            <div class="auth-tab" onclick="switchAuthTab('register')">Register</div>
+        </div>
+
+        <!-- Login Form -->
+        <div id="loginForm">
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input class="form-input" id="loginUser" placeholder="Enter username">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input class="form-input" id="loginPass" type="password" placeholder="Enter password">
+            </div>
+            <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="doLogin()">Login</button>
+            <div style="text-align:center;margin-top:14px;">
+                <a href="#" onclick="switchAuthTab('forgot')" style="color:var(--accent-cyan);font-size:13px;text-decoration:none;">Forgot Password?</a>
+            </div>
+        </div>
+
+        <!-- Register Form -->
+        <div id="registerForm" style="display:none;">
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input class="form-input" id="regUser" placeholder="Choose username">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input class="form-input" id="regEmail" type="email" placeholder="your@email.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input class="form-input" id="regPass" type="password" placeholder="Create password">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Role</label>
+                <select class="form-select" id="regRole">
+                    <option value="student">Student</option>
+                    <option value="faculty">Faculty</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="doRegister()">Register</button>
+        </div>
+
+        <!-- Forgot Password Form -->
+        <div id="forgotForm" style="display:none;">
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:18px;">তোমার username আর email দাও, তারপর নতুন password সেট করো।</p>
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input class="form-input" id="forgotUser" placeholder="Enter your username">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input class="form-input" id="forgotEmail" type="email" placeholder="Enter your email">
+            </div>
+            <div class="form-group">
+                <label class="form-label">New Password</label>
+                <input class="form-input" id="forgotNewPass" type="password" placeholder="Enter new password">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Confirm New Password</label>
+                <input class="form-input" id="forgotConfirmPass" type="password" placeholder="Confirm new password">
+            </div>
+            <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="doResetPassword()">Reset Password</button>
+            <div style="text-align:center;margin-top:14px;">
+                <a href="#" onclick="switchAuthTab('login')" style="color:var(--accent-cyan);font-size:13px;text-decoration:none;">← Back to Login</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════ SIDEBAR ══════════ -->
+<div class="sidebar" id="sidebar" style="display:none;">
+    <div class="logo">⚡ SmartLab</div>
+    <div class="logo-sub">v1.0 — Queue Monitor</div>
+
+    <div class="nav-item active" onclick="showPage('dashboard', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span class="nav-text">Dashboard</span>
+    </div>
+    <div class="nav-item" onclick="showPage('equipment', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        <span class="nav-text">Equipment</span>
+    </div>
+    <div class="nav-item" onclick="showPage('queue', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        <span class="nav-text">Queue</span>
+    </div>
+    <div class="nav-item" onclick="showPage('fsm', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        <span class="nav-text">FSM Diagram</span>
+    </div>
+    <div class="nav-item" onclick="showPage('analytics', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+        <span class="nav-text">Analytics</span>
+    </div>
+    <div class="nav-item" onclick="showPage('history', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span class="nav-text">History</span>
+    </div>
+
+    <div class="user-info" id="userInfoPanel">
+        <div class="name" id="sidebarUsername">—</div>
+        <div class="role" id="sidebarRole">—</div>
+        <button class="logout-btn" style="background:var(--accent-cyan-dim);color:var(--accent-cyan);border-color:rgba(34,211,238,0.3);margin-bottom:6px;" onclick="openModal('changePassModal')">Change Password</button>
+        <button class="logout-btn" onclick="doLogout()">Logout</button>
+    </div>
+</div>
+
+<!-- ══════════ MAIN CONTENT ══════════ -->
+<div class="main" id="mainContent" style="display:none;">
+
+    <!-- ── DASHBOARD ── -->
+    <div class="page active" id="page-dashboard">
+        <div class="page-title">Dashboard <span class="live-dot" style="margin-left:8px;"></span></div>
+        <div class="page-subtitle">Real-time laboratory equipment monitoring</div>
+
+        <div class="stats-grid" id="dashboardStats">
+            <div class="stat-card"><div class="stat-label">Total Equipment</div><div class="stat-value cyan" id="statTotal">0</div></div>
+            <div class="stat-card"><div class="stat-label">Idle</div><div class="stat-value green" id="statIdle">0</div></div>
+            <div class="stat-card"><div class="stat-label">Busy</div><div class="stat-value amber" id="statBusy">0</div></div>
+            <div class="stat-card"><div class="stat-label">Unavailable</div><div class="stat-value red" id="statUnavail">0</div></div>
+            <div class="stat-card"><div class="stat-label">In Queue</div><div class="stat-value purple" id="statWaiting">0</div></div>
+            <div class="stat-card"><div class="stat-label">Completed Today</div><div class="stat-value cyan" id="statCompleted">0</div></div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-title"><span class="dot" style="background:var(--accent-cyan)"></span> Equipment Status Distribution</div>
+                <canvas id="statusChart" height="220"></canvas>
+            </div>
+            <div class="card">
+                <div class="card-title"><span class="dot" style="background:var(--accent-green)"></span> Live Equipment List</div>
+                <div id="dashEquipList" style="max-height:280px;overflow-y:auto;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── EQUIPMENT ── -->
+    <div class="page" id="page-equipment">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <div>
+                <div class="page-title">Equipment</div>
+                <div class="page-subtitle">Manage laboratory equipment inventory</div>
+            </div>
+            <button class="btn btn-primary" id="addEquipBtn" onclick="openAddEquipModal()">+ Add Equipment</button>
+        </div>
+
+        <div id="equipmentList"></div>
+    </div>
+
+    <!-- ── QUEUE ── -->
+    <div class="page" id="page-queue">
+        <div class="page-title">Queue Management</div>
+        <div class="page-subtitle">Request equipment and monitor your position</div>
+
+        <div class="card">
+            <div class="card-title"><span class="dot" style="background:var(--accent-purple)"></span> Available Equipment — Click to Request</div>
+            <div id="queueEquipList"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><span class="dot" style="background:var(--accent-amber)"></span> Current Queues</div>
+            <div id="allQueuesDisplay"></div>
+        </div>
+    </div>
+
+    <!-- ── FSM DIAGRAM ── -->
+    <div class="page" id="page-fsm">
+        <div class="page-title">Finite State Machine</div>
+        <div class="page-subtitle">Equipment state transition diagram</div>
+
+        <div class="card">
+            <div class="card-title"><span class="dot" style="background:var(--accent-cyan)"></span> FSM — Equipment States</div>
+            <div class="fsm-container" id="fsmDiagram"></div>
+        </div>
+
+        <div class="card" id="manualTransitionCard">
+            <div class="card-title"><span class="dot" style="background:var(--accent-amber)"></span> Manual State Transition (Admin Only)</div>
+            <div class="grid-3" style="align-items:end;">
+                <div class="form-group">
+                    <label class="form-label">Equipment</label>
+                    <select class="form-select" id="fsmEquipSelect"></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">New State</label>
+                    <select class="form-select" id="fsmNewState">
+                        <option value="idle">Idle</option>
+                        <option value="busy">Busy</option>
+                        <option value="unavailable">Unavailable</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button class="btn btn-primary" onclick="doTransition()">Transition</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><span class="dot" style="background:var(--accent-green)"></span> Recent Transitions</div>
+            <div class="table-wrap">
+                <table id="transitionTable">
+                    <thead><tr><th>Equipment</th><th>From</th><th>To</th><th>By</th><th>Time</th></tr></thead>
+                    <tbody id="transitionBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── ANALYTICS ── -->
+    <div class="page" id="page-analytics">
+        <div class="page-title">Analytics</div>
+        <div class="page-subtitle">Queuing theory metrics and performance analysis</div>
+
+        <div class="card">
+            <div class="card-title"><span class="dot" style="background:var(--accent-cyan)"></span> M/M/c Queue Calculator</div>
+            <div class="grid-3" style="align-items:end;">
+                <div class="form-group">
+                    <label class="form-label">Arrival Rate (λ)</label>
+                    <input class="form-input" id="mmcLambda" type="number" value="5" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Service Rate (μ)</label>
+                    <input class="form-input" id="mmcMu" type="number" value="3" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Servers (c)</label>
+                    <input class="form-input" id="mmcServers" type="number" value="2" min="1">
+                </div>
+            </div>
+            <button class="btn btn-primary" style="margin-top:8px;" onclick="calcMMC()">Calculate</button>
+            <div id="mmcResults" style="margin-top:16px;"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><span class="dot" style="background:var(--accent-green)"></span> Equipment Performance</div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Equipment</th><th>State</th><th>Total Uses</th><th>Avg Duration</th><th>Max Duration</th><th>Total Minutes</th></tr></thead>
+                    <tbody id="perfBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><span class="dot" style="background:var(--accent-purple)"></span> Utilization Chart</div>
+            <canvas id="utilizationChart" height="250"></canvas>
+        </div>
+    </div>
+
+    <!-- ── HISTORY ── -->
+    <div class="page" id="page-history">
+        <div class="page-title">Usage History</div>
+        <div class="page-subtitle">Historical equipment usage records</div>
+
+        <div class="card">
+            <div style="display:flex;gap:12px;align-items:end;margin-bottom:16px;">
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">Days</label>
+                    <select class="form-select" id="historyDays" style="width:120px;">
+                        <option value="1">1 Day</option>
+                        <option value="7" selected>7 Days</option>
+                        <option value="30">30 Days</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="loadHistory()">Load</button>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Equipment</th><th>User</th><th>Start</th><th>End</th><th>Duration (min)</th></tr></thead>
+                    <tbody id="historyBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal-overlay" id="addEquipModal">
+    <div class="modal">
+        <div class="modal-title">Add New Equipment</div>
+        <div class="form-group">
+            <label class="form-label">Name</label>
+            <input class="form-input" id="newEquipName" placeholder="e.g. Oscilloscope">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Category</label>
+            <input class="form-input" id="newEquipCat" placeholder="e.g. Measurement">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Service Rate (per hour)</label>
+            <input class="form-input" id="newEquipRate" type="number" value="2.0" step="0.1">
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-outline" onclick="closeModal('addEquipModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="doAddEquip()">Add</button>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal-overlay" id="changePassModal">
+    <div class="modal">
+        <div class="modal-title">Change Password</div>
+        <div class="form-group">
+            <label class="form-label">Current Password</label>
+            <input class="form-input" id="cpCurrentPass" type="password" placeholder="Enter current password">
+        </div>
+        <div class="form-group">
+            <label class="form-label">New Password</label>
+            <input class="form-input" id="cpNewPass" type="password" placeholder="Enter new password">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Confirm New Password</label>
+            <input class="form-input" id="cpConfirmPass" type="password" placeholder="Confirm new password">
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-outline" onclick="closeModal('changePassModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="doChangePassword()">Change Password</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════ TOAST ══════════ -->
+<div class="toast" id="toast"></div>
+
+<script>
+
+// CONFIG
+
+const API = 'http://localhost:5000/api';
+
+
+// UTILITIES
+
+async function api(path, method = 'GET', body = null) {
+    const opts = {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(API + path, opts);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+}
+
+function toast(msg, type = 'success') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast ' + type;
+    el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 3000);
+}
+
+function formatDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+
+function stateHTML(state) {
+    return `<span class="state-badge state-${state}">${state}</span>`;
+}
+
+
+// AUTH
+
+let currentUser = null;
+
+function switchAuthTab(tab) {
+    document.querySelectorAll('.auth-tab').forEach((t, i) => {
+        t.classList.toggle('active', (tab === 'login' && i === 0) || (tab === 'register' && i === 1));
+    });
+    document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
+    document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
+    document.getElementById('forgotForm').style.display = tab === 'forgot' ? 'block' : 'none';
+}
+
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+
+async function doResetPassword() {
+    const newPass = document.getElementById('forgotNewPass').value;
+    const confirmPass = document.getElementById('forgotConfirmPass').value;
+
+    if (newPass !== confirmPass) {
+        toast('Passwords do not match!', 'error');
+        return;
+    }
+
+    try {
+        const data = await api('/reset-password', 'POST', {
+            username: document.getElementById('forgotUser').value,
+            email: document.getElementById('forgotEmail').value,
+            new_password: newPass
+        });
+        toast(data.message);
+        switchAuthTab('login');
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function doChangePassword() {
+    const newPass = document.getElementById('cpNewPass').value;
+    const confirmPass = document.getElementById('cpConfirmPass').value;
+
+    if (newPass !== confirmPass) {
+        toast('Passwords do not match!', 'error');
+        return;
+    }
+
+    try {
+        const data = await api('/change-password', 'POST', {
+            current_password: document.getElementById('cpCurrentPass').value,
+            new_password: newPass
+        });
+        toast(data.message);
+        closeModal('changePassModal');
+        // Clear fields
+        document.getElementById('cpCurrentPass').value = '';
+        document.getElementById('cpNewPass').value = '';
+        document.getElementById('cpConfirmPass').value = '';
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function doRegister() {
+    try {
+        await api('/register', 'POST', {
+            username: document.getElementById('regUser').value,
+            email: document.getElementById('regEmail').value,
+            password: document.getElementById('regPass').value,
+            role: document.getElementById('regRole').value
+        });
+        toast('Registration successful! Please login.');
+        switchAuthTab('login');
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function doLogin() {
+    try {
+        const data = await api('/login', 'POST', {
+            username: document.getElementById('loginUser').value,
+            password: document.getElementById('loginPass').value
+        });
+        currentUser = data.user;
+        enterApp();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function doLogout() {
+    await api('/logout', 'POST');
+    currentUser = null;
+    document.getElementById('authPage').style.display = 'flex';
+    document.getElementById('sidebar').style.display = 'none';
+    document.getElementById('mainContent').style.display = 'none';
+}
+
+function enterApp() {
+    document.getElementById('authPage').style.display = 'none';
+    document.getElementById('sidebar').style.display = 'flex';
+    document.getElementById('mainContent').style.display = 'block';
+    document.getElementById('sidebarUsername').textContent = currentUser.username;
+    document.getElementById('sidebarRole').textContent = currentUser.role;
+
+   
+    document.getElementById('addEquipBtn').style.display = currentUser.role === 'admin' ? 'inline-flex' : 'none';
+    document.getElementById('manualTransitionCard').style.display = currentUser.role === 'admin' ? 'block' : 'none';
+
+    loadDashboard();
+}
+
+// NAVIGATION
+
+function showPage(pageId, navEl) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('page-' + pageId).classList.add('active');
+    if (navEl) navEl.classList.add('active');
+
+    // Load data for each page
+    if (pageId === 'dashboard') loadDashboard();
+    else if (pageId === 'equipment') loadEquipment();
+    else if (pageId === 'queue') loadQueuePage();
+    else if (pageId === 'fsm') loadFSMPage();
+    else if (pageId === 'analytics') loadAnalytics();
+    else if (pageId === 'history') loadHistory();
+}
+
+
+let statusChart = null;
+
+async function loadDashboard() {
+    try {
+        const dash = await api('/dashboard');
+        document.getElementById('statTotal').textContent = dash.total_equipment;
+        document.getElementById('statIdle').textContent = dash.state_counts.idle || 0;
+        document.getElementById('statBusy').textContent = dash.state_counts.busy || 0;
+        document.getElementById('statUnavail').textContent = dash.state_counts.unavailable || 0;
+        document.getElementById('statWaiting').textContent = dash.total_waiting;
+        document.getElementById('statCompleted').textContent = dash.today_completed;
+
+        // Status Chart
+        const ctx = document.getElementById('statusChart').getContext('2d');
+        if (statusChart) statusChart.destroy();
+        statusChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Idle', 'Busy', 'Unavailable'],
+                datasets: [{
+                    data: [
+                        dash.state_counts.idle || 0,
+                        dash.state_counts.busy || 0,
+                        dash.state_counts.unavailable || 0
+                    ],
+                    backgroundColor: ['#34d399', '#fbbf24', '#f87171'],
+                    borderColor: '#1a2234',
+                    borderWidth: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#8899b4', padding: 20, font: { family: 'Outfit' } } }
+                },
+                cutout: '65%'
+            }
+        });
+
+        // Equipment List
+        const equips = await api('/equipment');
+        let html = '';
+        equips.forEach(eq => {
+            html += `
+                <div class="equip-item">
+                    <div>
+                        <div class="equip-name">${eq.name}</div>
+                        <div class="equip-category">${eq.category || '—'}</div>
+                    </div>
+                    <div style="display:flex;gap:10px;align-items:center;">
+                        <span class="queue-badge">Queue: ${eq.queue_length}</span>
+                        ${stateHTML(eq.state)}
+                    </div>
+                </div>`;
+        });
+        document.getElementById('dashEquipList').innerHTML = html || '<div style="color:var(--text-muted);padding:20px;text-align:center;">No equipment found</div>';
+    } catch (e) { console.error(e); }
+}
+
+
+async function loadEquipment() {
+    try {
+        const equips = await api('/equipment');
+        let html = '';
+        equips.forEach(eq => {
+            const adminBtns = currentUser.role === 'admin' ? `
+                <button class="btn btn-danger btn-sm" onclick="deleteEquip(${eq.id})">Delete</button>
+            ` : '';
+
+            html += `
+                <div class="equip-item">
+                    <div>
+                        <div class="equip-name">${eq.name}</div>
+                        <div class="equip-category">${eq.category || '—'} &nbsp;·&nbsp; Service Rate: ${eq.service_rate}/hr</div>
+                    </div>
+                    <div style="display:flex;gap:10px;align-items:center;">
+                        <span class="queue-badge">Queue: ${eq.queue_length}</span>
+                        ${stateHTML(eq.state)}
+                        ${adminBtns}
+                    </div>
+                </div>`;
+        });
+        document.getElementById('equipmentList').innerHTML = html || '<div style="color:var(--text-muted);padding:40px;text-align:center;">No equipment yet. Click "Add Equipment" to start.</div>';
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function openAddEquipModal() { document.getElementById('addEquipModal').classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+async function doAddEquip() {
+    try {
+        await api('/equipment', 'POST', {
+            name: document.getElementById('newEquipName').value,
+            category: document.getElementById('newEquipCat').value,
+            service_rate: parseFloat(document.getElementById('newEquipRate').value)
+        });
+        toast('Equipment added!');
+        closeModal('addEquipModal');
+        loadEquipment();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function deleteEquip(id) {
+    if (!confirm('Are you sure?')) return;
+    try {
+        await api(`/equipment/${id}`, 'DELETE');
+        toast('Equipment deleted');
+        loadEquipment();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+
+async function loadQueuePage() {
+    try {
+        const equips = await api('/equipment');
+
+        // Equipment list with request/release buttons
+        let html = '';
+        equips.forEach(eq => {
+            const isIdle = eq.state === 'idle';
+            html += `
+                <div class="equip-item">
+                    <div>
+                        <div class="equip-name">${eq.name}</div>
+                        <div class="equip-category">${eq.category || '—'} &nbsp;·&nbsp; Queue: ${eq.queue_length}</div>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        ${stateHTML(eq.state)}
+                        ${eq.state !== 'unavailable' ? `<button class="btn btn-primary btn-sm" onclick="requestEquip(${eq.id})">Request</button>` : ''}
+                        <button class="btn btn-success btn-sm" onclick="releaseEquip(${eq.id})">Release</button>
+                    </div>
+                </div>`;
+        });
+        document.getElementById('queueEquipList').innerHTML = html;
+
+        // All queues
+        let qhtml = '';
+        for (const eq of equips) {
+            try {
+                const queue = await api(`/equipment/${eq.id}/queue`);
+                if (queue.length > 0) {
+                    qhtml += `<div style="margin-bottom:16px;">
+                        <div style="font-weight:600;margin-bottom:8px;color:var(--accent-cyan);">${eq.name}</div>`;
+                    queue.forEach(q => {
+                        const statusColor = q.status === 'in_service' ? 'var(--accent-green)' : 'var(--accent-amber)';
+                        qhtml += `<div style="display:flex;justify-content:space-between;padding:8px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">
+                            <span>${q.username} — <span style="color:${statusColor};font-weight:600;">${q.status}</span></span>
+                            <span style="color:var(--text-muted);font-size:13px;">Position: ${q.position_in_queue} · Wait: ${Math.round(q.estimated_wait * 60)}min</span>
+                        </div>`;
+                    });
+                    qhtml += `</div>`;
+                }
+            } catch (e) {}
+        }
+        document.getElementById('allQueuesDisplay').innerHTML = qhtml || '<div style="color:var(--text-muted);padding:20px;text-align:center;">No active queues</div>';
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function requestEquip(id) {
+    try {
+        const data = await api(`/equipment/${id}/request`, 'POST');
+        toast(data.message);
+        loadQueuePage();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function releaseEquip(id) {
+    try {
+        const data = await api(`/equipment/${id}/release`, 'POST');
+        toast(data.message);
+        loadQueuePage();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+
+async function loadFSMPage() {
+    // Draw FSM SVG
+    document.getElementById('fsmDiagram').innerHTML = `
+        <svg viewBox="0 0 700 340" xmlns="http://www.w3.org/2000/svg" style="max-width:680px;">
+            <!-- States -->
+            <circle cx="160" cy="170" r="60" fill="rgba(52,211,153,0.15)" stroke="#34d399" stroke-width="2.5"/>
+            <text x="160" y="165" text-anchor="middle" fill="#34d399" font-family="JetBrains Mono" font-size="15" font-weight="700">IDLE</text>
+            <text x="160" y="185" text-anchor="middle" fill="#5a6a85" font-family="Outfit" font-size="11">Available</text>
+
+            <circle cx="440" cy="170" r="60" fill="rgba(251,191,36,0.15)" stroke="#fbbf24" stroke-width="2.5"/>
+            <text x="440" y="165" text-anchor="middle" fill="#fbbf24" font-family="JetBrains Mono" font-size="15" font-weight="700">BUSY</text>
+            <text x="440" y="185" text-anchor="middle" fill="#5a6a85" font-family="Outfit" font-size="11">In Use</text>
+
+            <circle cx="300" cy="310" r="56" fill="rgba(248,113,113,0.15)" stroke="#f87171" stroke-width="2.5"/>
+            <text x="300" y="305" text-anchor="middle" fill="#f87171" font-family="JetBrains Mono" font-size="13" font-weight="700">UNAVAIL</text>
+            <text x="300" y="322" text-anchor="middle" fill="#5a6a85" font-family="Outfit" font-size="11">Offline</text>
+
+            <!-- Initial arrow -->
+            <defs><marker id="ah" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#22d3ee"/></marker></defs>
+            <line x1="40" y1="170" x2="95" y2="170" stroke="#22d3ee" stroke-width="2" marker-end="url(#ah)"/>
+            <text x="40" y="158" fill="#22d3ee" font-family="JetBrains Mono" font-size="10">start</text>
+
+            <!-- idle → busy -->
+            <line x1="220" y1="155" x2="375" y2="155" stroke="#34d399" stroke-width="2" marker-end="url(#ah)" stroke-dasharray=""/>
+            <text x="298" y="145" text-anchor="middle" fill="#8899b4" font-family="Outfit" font-size="11">User Request</text>
+
+            <!-- busy → idle -->
+            <line x1="380" y1="185" x2="225" y2="185" stroke="#fbbf24" stroke-width="2" marker-end="url(#ah)"/>
+            <text x="298" y="206" text-anchor="middle" fill="#8899b4" font-family="Outfit" font-size="11">Release</text>
+
+            <!-- idle → unavailable -->
+            <line x1="130" y1="228" x2="255" y2="285" stroke="#f87171" stroke-width="1.5" marker-end="url(#ah)" stroke-dasharray="6 3"/>
+            <text x="170" y="270" fill="#8899b4" font-family="Outfit" font-size="10">Maintenance</text>
+
+            <!-- busy → unavailable -->
+            <line x1="465" y1="228" x2="345" y2="285" stroke="#f87171" stroke-width="1.5" marker-end="url(#ah)" stroke-dasharray="6 3"/>
+            <text x="420" y="270" fill="#8899b4" font-family="Outfit" font-size="10">Emergency</text>
+
+            <!-- unavailable → idle -->
+            <path d="M248 295 Q 100 280 135 225" fill="none" stroke="#34d399" stroke-width="1.5" marker-end="url(#ah)" stroke-dasharray="6 3"/>
+            <text x="100" y="305" fill="#8899b4" font-family="Outfit" font-size="10">Repair Done</text>
+        </svg>`;
+
+    // Equipment dropdown for manual transition
+    const equips = await api('/equipment');
+    const sel = document.getElementById('fsmEquipSelect');
+    sel.innerHTML = equips.map(e => `<option value="${e.id}">${e.name} (${e.state})</option>`).join('');
+
+    loadTransitions();
+}
+
+async function doTransition() {
+    const eid = document.getElementById('fsmEquipSelect').value;
+    const newState = document.getElementById('fsmNewState').value;
+    try {
+        const data = await api(`/equipment/${eid}/transition`, 'POST', { new_state: newState });
+        toast(data.message);
+        loadFSMPage();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function loadTransitions() {
+    try {
+        const equips = await api('/equipment');
+        let allTransitions = [];
+        for (const eq of equips) {
+            try {
+                const trans = await api(`/equipment/${eq.id}/transitions`);
+                trans.forEach(t => { t.equipment_name = eq.name; });
+                allTransitions = allTransitions.concat(trans);
+            } catch (e) {}
+        }
+        allTransitions.sort((a, b) => new Date(b.transitioned_at) - new Date(a.transitioned_at));
+
+        const tbody = document.getElementById('transitionBody');
+        tbody.innerHTML = allTransitions.slice(0, 20).map(t => `
+            <tr>
+                <td>${t.equipment_name}</td>
+                <td>${stateHTML(t.from_state)}</td>
+                <td>${stateHTML(t.to_state)}</td>
+                <td>${t.triggered_by || '—'}</td>
+                <td style="color:var(--text-muted);font-size:13px;">${formatDate(t.transitioned_at)}</td>
+            </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No transitions yet</td></tr>';
+    } catch (e) {}
+}
+
+
+let utilChart = null;
+
+async function loadAnalytics() {
+    try {
+        // Performance table
+        const perf = await api('/analytics/performance');
+        document.getElementById('perfBody').innerHTML = perf.map(p => `
+            <tr>
+                <td style="font-weight:600;">${p.name}</td>
+                <td>${stateHTML(p.state)}</td>
+                <td>${p.total_uses}</td>
+                <td>${p.avg_duration || 0} min</td>
+                <td>${p.max_duration || 0} min</td>
+                <td>${p.total_minutes || 0} min</td>
+            </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">No data yet</td></tr>';
+
+        // Utilization bar chart
+        const ctx = document.getElementById('utilizationChart').getContext('2d');
+        if (utilChart) utilChart.destroy();
+        utilChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: perf.map(p => p.name.length > 18 ? p.name.substring(0, 18) + '…' : p.name),
+                datasets: [{
+                    label: 'Total Uses',
+                    data: perf.map(p => p.total_uses),
+                    backgroundColor: 'rgba(34,211,238,0.6)',
+                    borderColor: '#22d3ee',
+                    borderWidth: 1,
+                    borderRadius: 6
+                }, {
+                    label: 'Total Minutes',
+                    data: perf.map(p => p.total_minutes || 0),
+                    backgroundColor: 'rgba(167,139,250,0.5)',
+                    borderColor: '#a78bfa',
+                    borderWidth: 1,
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { labels: { color: '#8899b4', font: { family: 'Outfit' } } } },
+                scales: {
+                    x: { ticks: { color: '#5a6a85', font: { family: 'Outfit', size: 11 } }, grid: { color: 'rgba(42,54,80,0.4)' } },
+                    y: { ticks: { color: '#5a6a85' }, grid: { color: 'rgba(42,54,80,0.4)' } }
+                }
+            }
+        });
+    } catch (e) { console.error(e); }
+}
+
+async function calcMMC() {
+    const lam = parseFloat(document.getElementById('mmcLambda').value);
+    const mu = parseFloat(document.getElementById('mmcMu').value);
+    const c = parseInt(document.getElementById('mmcServers').value);
+
+    try {
+        const data = await api('/analytics/mmc', 'POST', { arrival_rate: lam, service_rate: mu, servers: c });
+
+        if (!data.stable) {
+            document.getElementById('mmcResults').innerHTML = `<div style="color:var(--accent-red);font-weight:600;padding:12px;background:var(--accent-red-dim);border-radius:8px;">⚠ ${data.message}</div>`;
+            return;
+        }
+
+        document.getElementById('mmcResults').innerHTML = `
+            <div class="stats-grid" style="margin:0;">
+                <div class="stat-card"><div class="stat-label">Model</div><div class="stat-value cyan" style="font-size:20px;">${data.model}</div></div>
+                <div class="stat-card"><div class="stat-label">Utilization (ρ)</div><div class="stat-value amber" style="font-size:20px;">${(data.utilization * 100).toFixed(1)}%</div></div>
+                <div class="stat-card"><div class="stat-label">Avg Wait (Wq)</div><div class="stat-value purple" style="font-size:20px;">${data.avg_wait_time.toFixed(3)}</div></div>
+                <div class="stat-card"><div class="stat-label">Avg in Queue (Lq)</div><div class="stat-value red" style="font-size:20px;">${data.avg_in_queue.toFixed(3)}</div></div>
+                <div class="stat-card"><div class="stat-label">Avg in System (L)</div><div class="stat-value green" style="font-size:20px;">${data.avg_in_system.toFixed(3)}</div></div>
+                <div class="stat-card"><div class="stat-label">P(empty)</div><div class="stat-value cyan" style="font-size:20px;">${(data.prob_empty * 100).toFixed(1)}%</div></div>
+            </div>`;
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+
+async function loadHistory() {
+    const days = document.getElementById('historyDays').value;
+    try {
+        const history = await api(`/history?days=${days}`);
+        document.getElementById('historyBody').innerHTML = history.map(h => `
+            <tr>
+                <td style="font-weight:600;">${h.equipment_name}</td>
+                <td>${h.username}</td>
+                <td style="font-size:13px;color:var(--text-muted);">${formatDate(h.start_time)}</td>
+                <td style="font-size:13px;color:var(--text-muted);">${formatDate(h.end_time)}</td>
+                <td>${h.duration_minutes ? h.duration_minutes.toFixed(1) : '—'}</td>
+            </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No history found</td></tr>';
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+setInterval(() => {
+    const activePage = document.querySelector('.page.active');
+    if (activePage && activePage.id === 'page-dashboard' && currentUser) {
+        loadDashboard();
+    }
+}, 10000);
+
+
+(async function() {
+    try {
+        const user = await api('/me');
+        currentUser = user;
+        enterApp();
+    } catch (e) {
+        
+    }
+})();
+</script>
+
+</body>
+</html>
